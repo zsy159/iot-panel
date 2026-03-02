@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT设备管理面板</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.esm.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <nav class="top-nav">
+        <div class="logo">IoT设备管理平台</div>
+        <div class="connection-status">
+            <span class="status-dot" id="connDot"></span>
+            <span id="connStatus">连接中...</span>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="main-content">
+        <!-- 统计卡片 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon online">●</div>
+                <div class="stat-info">
+                    <h4>在线设备</h4>
+                    <div class="number" id="onlineCount">0</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon offline">○</div>
+                <div class="stat-info">
+                    <h4>离线设备</h4>
+                    <div class="number" id="offlineCount">0</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon alarm">!</div>
+                <div class="stat-info">
+                    <h4>告警设备</h4>
+                    <div class="number" id="alarmCount">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设备列表 -->
+        <h2 class="section-title">设备监控</h2>
+        <div id="deviceGrid"></div>
+    </main>
+
+    <!-- 历史数据弹窗 -->
+    <div class="modal" id="historyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>历史数据 - <span id="historyDeviceName"></span></h3>
+                <button class="close-btn" onclick="document.getElementById('historyModal').classList.remove('active')">×</button>
+            </div>
+            <div class="modal-body" id="historyChartContainer"></div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
