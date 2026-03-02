@@ -24,25 +24,30 @@ class IoTPanel {
         // 初始化本地存储
         await this.storage.init();
         
-        // 初始化图表历史（传入容器）
+        // 初始化图表历史
         this.chartHistory = new ChartHistory('historyChartContainer');
         
         // 初始化指令面板
         this.commandPanel = new CommandPanel(this.mqtt);
         
-        // 初始化设备管理
+        // 初始化设备管理（关键：先创建设备，再连接MQTT）
         this.devices = new DeviceManager(this.mqtt, this.storage, this);
         
-        // 连接MQTT
+        // 先添加设备（这样就有数据了）
+        this.setupDemoDevices();
+        
+        // 尝试连接MQTT（不影响已有设备显示）
         try {
             await this.mqtt.connect();
+            console.log('MQTT连接成功');
             this.updateConnectionStatus(true);
-            this.setupDemoDevices();
         } catch (err) {
-            console.error('连接失败:', err);
+            console.warn('MQTT连接失败，使用纯模拟模式:', err);
             this.updateConnectionStatus(false);
-            this.enableOfflineMode();
         }
+
+        // 启动模拟数据（无论MQTT是否成功，都有数据）
+        this.startMockDataStream();
 
         // 网络状态监听
         window.addEventListener('online', () => this.onNetworkRestore());
@@ -58,7 +63,7 @@ class IoTPanel {
             text.textContent = '已连接';
         } else {
             dot.className = 'status-dot offline';
-            text.textContent = '离线模式';
+            text.textContent = '模拟模式';
         }
     }
 
@@ -70,22 +75,32 @@ class IoTPanel {
         ];
         
         demoDevices.forEach(d => this.devices.addDevice(d));
-        this.startMockDataStream();
         this.updateStats();
     }
 
     startMockDataStream() {
+        // 立即执行一次
+        this.generateMockData();
+        
+        // 每2秒更新
         setInterval(() => {
-            this.devices.devices.forEach((device, id) => {
-                const mockData = {
-                    temperature: 20 + Math.random() * 30,
-                    humidity: 40 + Math.random() * 40,
-                    voltage: 3.3 + (Math.random() - 0.5) * 0.5
-                };
-                this.devices.handleDeviceData(id, mockData);
-            });
-            this.updateStats();
-        }, 2000);
+            this.generateMockData();
+        }, 5000);
+    }
+
+    generateMockData() {
+        this.devices.devices.forEach((device, id) => {
+            const mockData = {
+                temperature: 20 + Math.random() * 30,  // 20-50度
+                humidity: 40 + Math.random() * 40,     // 40-80%
+                voltage: 3.0 + Math.random() * 0.6     // 3.0-3.6V
+            };
+            
+            // 直接调用处理数据的方法
+            this.devices.handleDeviceData(id, mockData);
+        });
+        
+        this.updateStats();
     }
 
     updateStats() {
@@ -102,31 +117,24 @@ class IoTPanel {
         document.getElementById('alarmCount').textContent = alarm;
     }
 
-    /**
-     * 显示设备历史（供DeviceManager调用）
-     */
     showDeviceHistory(deviceId, deviceName) {
         document.getElementById('historyDeviceName').textContent = deviceName;
         document.getElementById('historyModal').classList.add('active');
         this.chartHistory.show(deviceId, this.storage);
     }
 
-    /**
-     * 显示指令面板（供DeviceManager调用）
-     */
     showCommandPanel(deviceId, deviceName) {
         this.commandPanel.show(deviceId, deviceName);
     }
 
     async onNetworkRestore() {
-        console.log('网络恢复，同步数据...');
-        this.updateConnectionStatus(true);
-        
-        for (const [deviceId] of this.devices.devices) {
-            const unsynced = await this.storage.getUnsyncedData(deviceId);
-            if (unsynced.length > 0) {
-                await this.storage.markAsSynced(unsynced.map(d => d.id));
-                console.log(`同步了${unsynced.length}条数据`);
+        console.log('网络恢复');
+        if (!this.mqtt.isConnected) {
+            try {
+                await this.mqtt.connect();
+                this.updateConnectionStatus(true);
+            } catch (e) {
+                console.error('重连失败:', e);
             }
         }
     }
@@ -135,11 +143,7 @@ class IoTPanel {
         console.warn('网络断开');
         this.updateConnectionStatus(false);
     }
-
-    enableOfflineMode() {
-        // 从本地加载缓存数据
-    }
 }
 
-// 全局实例供HTML调用
+// 启动
 window.iotPanel = new IoTPanel();

@@ -52,46 +52,80 @@ class DeviceManager {
     /**
      * 处理设备数据
      */
+   // 在 handleDeviceData 方法中，首次数据时设为在线
     handleDeviceData(deviceId, data) {
         const device = this.devices.get(deviceId);
         if (!device) return;
         
+        // 首次收到数据，设为在线
+        if (device.status === 'offline') {
+            this.updateDeviceStatus(deviceId, 'online');
+        }
+        
+        // 告警恢复逻辑
+        if (device.status === 'alarm') {
+            if (this.checkDataNormal(data)) {
+                this.updateDeviceStatus(deviceId, 'online');
+            }
+        }
+
         device.lastSeen = Date.now();
         device.data = data;
         device.history.push({ ...data, time: Date.now() });
         
-        // 只保留最近50条内存缓存
         if (device.history.length > 50) device.history.shift();
         
-        // 离线存储（如果开启了本地缓存）
         if (this.storage) {
             this.storage.cacheData(deviceId, data);
         }
         
-        // 更新UI
         this.updateDeviceUI(deviceId);
-        
-        // 检查告警阈值
         this.checkThresholds(deviceId, data);
     }
+
+
+    checkDataNormal(data) {
+    // 所有指标都在正常范围内
+    const tempNormal = !data.temperature || data.temperature <= 35;  // 温度≤35正常
+    const humiNormal = !data.humidity || (data.humidity >= 20 && data.humidity <= 80);  // 湿度20-80正常
+    const voltNormal = !data.voltage || data.voltage >= 3.0;  // 电压≥3.0正常
+    
+    return tempNormal && humiNormal && voltNormal;
+}
+
 
     /**
      * 检查数据阈值并触发告警
      */
     checkThresholds(deviceId, data) {
-        // 温度超过40度告警
-        if (data.temperature > 40) {
-            this.triggerAlarm(deviceId, '温度过高', `${data.temperature}°C`);
-        }
-        // 湿度低于20%告警
-        if (data.humidity < 20) {
-            this.triggerAlarm(deviceId, '湿度过低', `${data.humidity}%`);
-        }
-        // 电压过低告警
-        if (data.voltage < 2.8) {
-            this.triggerAlarm(deviceId, '电量不足', `${data.voltage}V`);
-        }
+    // 如果已经是告警状态，不再重复触发
+    const device = this.devices.get(deviceId);
+    if (device.status === 'alarm') return;
+    
+    let reason = null;
+    let value = null;
+    
+    // 温度超过35度告警（降低阈值，方便测试）
+    if (data.temperature > 35) {
+        reason = '温度过高';
+        value = `${data.temperature.toFixed(1)}°C`;
     }
+    // 湿度低于20%或高于80%告警
+    else if (data.humidity < 20 || data.humidity > 80) {
+        reason = '湿度异常';
+        value = `${data.humidity.toFixed(1)}%`;
+    }
+    // 电压过低告警
+    else if (data.voltage < 3.0) {
+        reason = '电量不足';
+        value = `${data.voltage.toFixed(2)}V`;
+    }
+    
+    // 有异常才触发
+    if (reason) {
+        this.triggerAlarm(deviceId, reason, value);
+    }
+}
 
     /**
      * 触发告警
